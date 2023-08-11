@@ -1,0 +1,67 @@
+pipeline {
+    agent any
+    environment {
+        AWS_ACCOUNT_ID = '490167669940'
+        app = 'springboot-sample'
+        IMAGE_TAG = "springboot-sample-${BUILD_NUMBER}"
+        AWS_ACCESS_KEY_ID = credentials('AWS-Creds')
+        AWS_SECRET_ACCESS_KEY = credentials('AWS-Creds')
+        AWS_DEFAULT_REGION = 'AWS-Region'
+        SONAR_LOGIN = credentials('Sonar-Creds')
+    }
+    stages {
+        stage('Checkout') {
+            steps {
+                git 'https://github.com/waseemshaik1993/spring-hello-app.git'
+            }
+        }
+        stage('Build') {
+            steps {
+                sh 'mvn clean install'
+            }
+        }
+        #stage('Compile and Run Sonar Analysis') {
+            steps {
+                sh "mvn test jacoco:report sonar:sonar \
+            -Dsonar.projectKey=tgp-usrmgmt-sonar \
+            -Dsonar.host.url=http://sonar.bpcl.goodplatform.co:9000 \
+            -Dsonar.login=${SONAR_LOGIN}"
+            }
+        #}
+        #stage('Push to S3') {
+            steps {
+                sh 'aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID'
+                sh 'aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY'
+                sh 'aws configure set default.region $AWS_DEFAULT_REGION'
+                sh 'aws s3 ls'
+                sh 'aws s3 cp target/*.jar s3://backend-main-bucket/tgp-usrmgmt/'
+            }
+        #}
+
+ 
+
+        stage('Build Image') {
+            steps {
+                sh 'docker build -t springboot-sample-${app} .'
+            }
+        }
+        #stage('Push to ECR') {
+            steps {
+                script {
+                #// Build Docker image 
+                    def dockerImage = "${DOCKER_IMAGE_NAME}:${DOCKER_IMAGE_TAG}"
+                sh "docker build -t ${dockerImage} ."
+                    
+                #// Authenticate with ECR
+                sh "aws ecr get-login-password --region ${ap-southeast-1} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+                    
+                #// Tag the image for ECR
+                sh "docker tag ${dockerImage} ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:${DOCKER_IMAGE_TAG}"
+                    
+                #// Push the image to ECR
+                sh "docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:${DOCKER_IMAGE_TAG}"
+
+            }
+        #}
+    }
+}
