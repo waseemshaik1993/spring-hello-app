@@ -1,5 +1,9 @@
 pipeline {
     agent any
+    environment {
+        app = 'springboot-frontend'
+        SONAR_LOGIN = credentials('Sonar-Creds')
+    }
     stages {
         stage('Checkout') {
             steps {
